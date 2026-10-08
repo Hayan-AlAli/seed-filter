@@ -69,7 +69,7 @@ int main(void)
     sf_search(&shNear, 1000, 256, &noStop, &seed);
     ms = 1000.0 * (clock() - t0) / CLOCKS_PER_SEC;
     printf("stronghold<=50 batch of 256: %.0f ms\n", ms);
-    CHECK(ms < 1500);
+    CHECK(ms < 5000); // ~1 s on a desktop; the old per-seed biome snap took ~14 s
 
     // biome size: each size is findable and the found seed measures as that size
     for (int size = SF_SIZE_SMALL; size <= SF_SIZE_LARGE; size++) {

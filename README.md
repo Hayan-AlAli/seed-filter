@@ -56,6 +56,15 @@ No. It only chooses the seed. The world is pure vanilla.
 - **Source code:** https://github.com/Hayan-AlAli/seed-filter
 - **Report a bug or suggest a feature:** https://github.com/Hayan-AlAli/seed-filter/issues
 
+## Verifying the binaries
+
+The jar includes native libraries (cubiomes plus a small C wrapper, see `native/`) for each supported system.
+Every file is built from this repository by [GitHub Actions](https://github.com/Hayan-AlAli/seed-filter/actions), with no files from a developer's PC, and the build is reproducible: the same commit always produces byte-identical files.
+
+- Each run prints SHA-256 sums of the jar and every native library and signs a build provenance attestation.
+- To check a downloaded jar: `gh attestation verify seedfilter-<version>.jar --repo Hayan-AlAli/seed-filter`
+- Or build it yourself (`./gradlew build` with JDK 25 and Zig 0.17.0) and compare the SHA-256.
+
 ## Credits
 
 - Seed checks use **cubiomes** by Cubitect, through the [xu-shawn fork](https://github.com/xu-shawn/cubiomes) (MIT), which adds 26.x support.

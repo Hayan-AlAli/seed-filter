@@ -36,8 +36,8 @@ def nativeTargets = [
 	'windows-arm64': ['aarch64-windows-gnu', 'seedfilter.dll', []],
 	'linux-x64'    : ['x86_64-linux-gnu.2.17', 'libseedfilter.so', ['-mpopcnt', '-fPIC']],
 	'linux-arm64'  : ['aarch64-linux-gnu.2.17', 'libseedfilter.so', ['-fPIC']],
-	'macos-x64'    : ['x86_64-macos', 'libseedfilter.dylib', ['-mpopcnt']],
-	'macos-arm64'  : ['aarch64-macos', 'libseedfilter.dylib', []],
+	'macos-x64'    : ['x86_64-macos', 'libseedfilter.dylib', ['-mpopcnt', '-Wl,-install_name,libseedfilter.dylib']],
+	'macos-arm64'  : ['aarch64-macos', 'libseedfilter.dylib', ['-Wl,-install_name,libseedfilter.dylib']],
 ]
 def nativeTasks = nativeTargets.collect { name, t ->
 	def out = new File(nativeOut, "$name/${t[1]}")
@@ -45,12 +45,17 @@ def nativeTasks = nativeTargets.collect { name, t ->
 		inputs.files(cubiomesSrc, 'native/seedfilter.c', 'native/seedfilter.h')
 		outputs.file(out)
 		doFirst { out.parentFile.mkdirs() }
-		commandLine(['zig', 'cc', '-shared', '-O3', '-DSF_BUILD_DLL', '-target', t[0], *t[2], '-o', out.path, *libSources])
+		// reproducible: no debug info / PDB, no absolute paths, so CI and local builds are byte-identical
+		commandLine(['zig', 'cc', '-shared', '-O3', '-g0', '-s', "-ffile-prefix-map=${projectDir}=.", '-DSF_BUILD_DLL',
+				'-target', t[0], *t[2], '-o', out.path, *libSources])
 	}
 }
+// one at a time: parallel zig runs can race while filling a fresh cache (as on a CI machine)
+nativeTasks.eachWithIndex { t, i -> if (i > 0) t.configure { mustRunAfter nativeTasks[i - 1] } }
 tasks.register('buildNative') { dependsOn nativeTasks }
 
 tasks.register('compileNativeTest', Exec) {
+	mustRunAfter nativeTasks
 	inputs.files(cubiomesSrc, 'native/seedfilter.c', 'native/seedfilter.h', 'native/test_seedfilter.c')
 	outputs.file(testExe)
 	doFirst { nativeOut.mkdirs() }
