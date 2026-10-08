@@ -5,6 +5,11 @@
 	"name": "Seed Filter",
 	"description": "Pick your spawn biome, nearby structures and Nether — then press Create New World and the mod finds a matching seed.",
 	"license": "MIT",
+	"contact": {
+		"homepage": "https://modrinth.com/mod/seed-filter",
+		"sources": "https://github.com/Hayan-AlAli/seed-filter",
+		"issues": "https://github.com/Hayan-AlAli/seed-filter/issues"
+	},
 	"icon": "assets/seedfilter/icon.png",
 	"environment": "client",
 	"entrypoints": {

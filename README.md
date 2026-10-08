@@ -51,6 +51,11 @@ Practically, no. Some structures need biomes that almost never sit next to each 
 **Does it change world generation?**
 No. It only chooses the seed. The world is pure vanilla.
 
+## Links
+
+- **Source code:** https://github.com/Hayan-AlAli/seed-filter
+- **Report a bug or suggest a feature:** https://github.com/Hayan-AlAli/seed-filter/issues
+
 ## Credits
 
 - Seed checks use **cubiomes** by Cubitect, through the [xu-shawn fork](https://github.com/xu-shawn/cubiomes) (MIT), which adds 26.x support.

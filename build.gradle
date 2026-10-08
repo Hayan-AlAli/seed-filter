@@ -1,5 +1,6 @@
 plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'com.modrinth.minotaur' version '2.10.0'
 }
 
 dependencies {
@@ -82,3 +83,32 @@ test {
 }
 
 check.dependsOn 'testNative'
+
+// ---- Modrinth (https://modrinth.com/mod/seed-filter) ----
+// Upload:       MODRINTH_TOKEN=<token> ./gradlew modrinth
+// Dry run:      ./gradlew modrinth -PmodrinthDryRun   (prints the request, uploads nothing)
+// Description:  ./gradlew modrinthSyncBody           (README.md becomes the project description)
+def changelogFor = { String version ->
+	def lines = file('CHANGELOG.md').readLines()
+	def start = lines.findIndexOf { it.startsWith("## ${version}") }
+	if (start < 0) return "See CHANGELOG.md"
+	def end = lines.findIndexOf(start + 1) { it.startsWith('## ') }
+	lines.subList(start + 1, end < 0 ? lines.size() : end).join(System.lineSeparator()).trim()
+}
+
+modrinth {
+	token = System.getenv('MODRINTH_TOKEN')
+	projectId = 'seed-filter'
+	versionNumber = project.version.toString()
+	versionName = "Seed Filter ${project.version}"
+	versionType = 'beta'
+	uploadFile = tasks.named('jar')
+	gameVersions = [project.minecraft_version]
+	loaders = ['fabric']
+	changelog = changelogFor(project.version.toString())
+	syncBodyFrom = file('README.md').text
+	debugMode = project.hasProperty('modrinthDryRun')
+	dependencies {
+		required.project 'fabric-api'
+	}
+}
