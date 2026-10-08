@@ -1,0 +1,34 @@
+# build output
+build/
+.gradle/
+out/
+bin/
+*.class
+
+# Minecraft dev runs (worlds, logs, options)
+run/
+run-*/
+logs/
+crash-reports/
+*.log
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS junk (Windows / OneDrive / macOS)
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# local tools and private working notes
+.superpowers/
+.claude/
+docs/superpowers/
+docs/release-checklist.md

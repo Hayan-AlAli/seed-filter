@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "seedfilter",
+	"version": "${version}",
+	"name": "Seed Filter",
+	"description": "Pick your spawn biome, nearby structures and Nether — then press Create New World and the mod finds a matching seed.",
+	"license": "MIT",
+	"icon": "assets/seedfilter/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["seedfilter.SeedFilterMod"]
+	},
+	"mixins": ["seedfilter.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

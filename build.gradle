@@ -1,0 +1,84 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	testImplementation platform("org.junit:junit-bom:5.12.2")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+tasks.withType(JavaCompile).configureEach { it.options.release = 25 }
+java {
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+// ---- native (cubiomes + seedfilter.c) ----
+def nativeOut = layout.buildDirectory.dir('native').get().asFile
+def dll = new File(nativeOut, 'windows-x64/seedfilter.dll') // host library used by the Java tests
+def testExe = new File(nativeOut, 'test_seedfilter.exe')
+def cubiomesSrc = fileTree('native/cubiomes') {
+	include '*.c', 'features/*.c', 'loot/**/*.c'
+	exclude 'tests.c'
+}
+def libSources = ['native/seedfilter.c'] + cubiomesSrc.files.collect { it.path }
+def zigFlags = ['-O3', '-target', 'x86_64-windows-gnu', '-mpopcnt']
+
+// one library per platform, all cross-compiled by zig; the mod picks one at runtime (Native.resourceFor)
+def nativeTargets = [
+	'windows-x64'  : ['x86_64-windows-gnu', 'seedfilter.dll', ['-mpopcnt']],
+	'windows-arm64': ['aarch64-windows-gnu', 'seedfilter.dll', []],
+	'linux-x64'    : ['x86_64-linux-gnu.2.17', 'libseedfilter.so', ['-mpopcnt', '-fPIC']],
+	'linux-arm64'  : ['aarch64-linux-gnu.2.17', 'libseedfilter.so', ['-fPIC']],
+	'macos-x64'    : ['x86_64-macos', 'libseedfilter.dylib', ['-mpopcnt']],
+	'macos-arm64'  : ['aarch64-macos', 'libseedfilter.dylib', []],
+]
+def nativeTasks = nativeTargets.collect { name, t ->
+	def out = new File(nativeOut, "$name/${t[1]}")
+	tasks.register("buildNative-$name", Exec) {
+		inputs.files(cubiomesSrc, 'native/seedfilter.c', 'native/seedfilter.h')
+		outputs.file(out)
+		doFirst { out.parentFile.mkdirs() }
+		commandLine(['zig', 'cc', '-shared', '-O3', '-DSF_BUILD_DLL', '-target', t[0], *t[2], '-o', out.path, *libSources])
+	}
+}
+tasks.register('buildNative') { dependsOn nativeTasks }
+
+tasks.register('compileNativeTest', Exec) {
+	inputs.files(cubiomesSrc, 'native/seedfilter.c', 'native/seedfilter.h', 'native/test_seedfilter.c')
+	outputs.file(testExe)
+	doFirst { nativeOut.mkdirs() }
+	commandLine(['zig', 'cc', *zigFlags, '-o', testExe.path, 'native/test_seedfilter.c', *libSources])
+}
+
+tasks.register('testNative', Exec) {
+	dependsOn 'compileNativeTest'
+	commandLine testExe.path
+}
+
+processResources {
+	dependsOn 'buildNative'
+	from(nativeOut) {
+		into 'natives'
+		include '*/*.dll', '*/*.so', '*/*.dylib'
+	}
+	from('LICENSE')
+	from('LICENSE-cubiomes')
+	def version = project.version
+	inputs.property "version", version
+	filesMatching("fabric.mod.json") { expand "version": version }
+}
+
+test {
+	dependsOn 'buildNative-windows-x64'
+	useJUnitPlatform()
+	systemProperty 'seedfilter.dll', dll.path
+	jvmArgs '--enable-native-access=ALL-UNNAMED'
+}
+
+check.dependsOn 'testNative'

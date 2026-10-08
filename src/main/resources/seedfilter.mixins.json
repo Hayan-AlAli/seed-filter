@@ -1,0 +1,7 @@
+{
+	"required": true,
+	"package": "seedfilter.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": ["CreateWorldScreenInvoker", "CreateWorldScreenMixin", "MoreTabMixin"],
+	"injectors": { "defaultRequire": 1 }
+}
