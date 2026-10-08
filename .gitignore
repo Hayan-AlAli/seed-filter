@@ -32,3 +32,7 @@ desktop.ini
 .claude/
 docs/superpowers/
 docs/release-checklist.md
+
+# Modrinth gallery images (generated from local screenshots)
+branding/gallery/
+branding/make_gallery.py
