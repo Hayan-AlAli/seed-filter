@@ -43,6 +43,10 @@ public class SeedFilterMod implements ClientModInitializer {
         return FabricLoader.getInstance().getConfigDir().resolve("seedfilter.json");
     }
 
+    public static Path cpuFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("seedfilter-cpu.txt");
+    }
+
     /** Empty if the chosen world type can't be modelled by cubiomes; otherwise whether it is Large Biomes. */
     public static Optional<Boolean> largeBiomes(CreateWorldScreen s) {
         Holder<WorldPreset> p = s.getUiState().getWorldType().preset();
@@ -122,14 +126,31 @@ public class SeedFilterMod implements ClientModInitializer {
         }
         try (InputStream in = SeedFilterMod.class.getResourceAsStream("/" + resource.get())) {
             byte[] bytes = in.readAllBytes();
-            // config/seedfilter/<os-arch>/<library>
-            Path dll = FabricLoader.getInstance().getConfigDir().resolve("seedfilter").resolve(resource.get().substring("natives/".length()));
+            // config/seedfilter/<content hash>/<os-arch>/<library>: a game still running an older version keeps its
+            // copy locked (Windows), so each version gets its own folder instead of overwriting a shared file
+            Path root = FabricLoader.getInstance().getConfigDir().resolve("seedfilter");
+            Path dir = root.resolve(Integer.toHexString(Arrays.hashCode(bytes)));
+            Path dll = dir.resolve(resource.get().substring("natives/".length()));
             Files.createDirectories(dll.getParent());
             if (!Files.exists(dll) || !Arrays.equals(Files.readAllBytes(dll), bytes)) Files.write(dll, bytes);
             Native.load(dll);
+            deleteOtherCopies(root, dir);
         } catch (Exception e) {
-            Native.fail(e.toString()); // e.g. DLL locked by a second running game with an older copy
+            Native.fail(e.toString());
         }
         if (!Native.isAvailable()) LOG.error("Seed Filter native library failed to load: {}", Native.error());
+    }
+
+    /** Best effort: copies from older versions (and the pre-1.1 layout); ones still locked by a running game stay. */
+    private static void deleteOtherCopies(Path root, Path keep) {
+        try (var all = Files.walk(root)) {
+            all.sorted(java.util.Comparator.reverseOrder()).filter(p -> !p.startsWith(keep) && !p.equals(root)).forEach(p -> {
+                try {
+                    Files.delete(p);
+                } catch (Exception ignored) { // in use or not empty: try again next launch
+                }
+            });
+        } catch (Exception ignored) {
+        }
     }
 }

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "seedfilter.h"
+#include "seedfilter.c" // the library itself, so the test can switch `precheck` off
 
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); fails++; } } while (0)
@@ -30,6 +30,65 @@ int main(void)
     uint64_t seed, again;
     volatile int32_t noStop = 0;
     int x, z, b;
+
+    // the pruned spawn search finds exactly cubiomes' (vanilla) spawn, default and large biomes
+    static Generator ref;
+    int spawnBad = 0;
+    clock_t tFast = 0, tRef = 0;
+    for (int large = 0; large <= 1; large++) {
+        setupGenerator(&ref, MC_26_3, large ? LARGE_BIOMES : 0);
+        for (uint64_t s = 0; s < 1000; s++) {
+            uint64_t sd = s * 0x9E3779B97F4A7C15ULL;
+            clock_t t = clock();
+            sf_spawn(large, sd, &x, &z, &b);
+            tFast += clock() - t;
+            t = clock();
+            applySeed(&ref, DIM_OVERWORLD, sd);
+            Pos p = getSpawn(&ref);
+            tRef += clock() - t;
+            if (p.x != x || p.z != z) spawnBad++;
+        }
+    }
+    printf("spawn: %d/2000 differ from getSpawn, %.1fx faster\n", spawnBad, (double)tRef / (tFast ? tFast : 1));
+    CHECK(spawnBad == 0);
+
+    // the structure pre-check never drops a seed that matches without it (and does reject hopeless seeds)
+    {
+        int ids[][2] = {{Mansion, 500}, {Mansion, 1500}, {Monument, 300}, {Monument, 800}, {Ancient_City, 400},
+                        {Trial_Chambers, 150}, {Village, 100}, {Outpost, 300}, {Desert_Pyramid, 400}};
+        static Generator gs[2];
+        setupGenerator(&gs[0], MC, 0);
+        setupGenerator(&gs[1], MC, 0);
+        int dropped = 0, rejected = 0, total = 0;
+        clock_t tOn = 0, tOff = 0;
+        for (int k = 0; k < 11; k++) {
+            SfFilter pf = blank();
+            if (k < 9) { pf.ruleCount = 1; pf.ruleStructure[0] = ids[k][0]; pf.ruleMaxDist[0] = ids[k][1]; }
+            else if (k == 9) pf.fortressDist = 60;
+            else { pf.bastionDist = 80; pf.bastionType = SF_BASTION_BRIDGE; }
+            for (uint64_t s = 0; s < 400; s++, total++) {
+                uint64_t sd = s * 0x9E3779B97F4A7C15ULL + (uint64_t)k;
+                clock_t t = clock();
+                precheck = 1;
+                int on = matches(&gs[0], &gs[1], &pf, sd);
+                tOn += clock() - t;
+                t = clock();
+                precheck = 0;
+                int off = matches(&gs[0], &gs[1], &pf, sd);
+                tOff += clock() - t;
+                applySeed(&gs[0], DIM_OVERWORLD, sd);
+                uint64_t best;
+                spawnCoarse(&gs[0], &best);
+                rejected += !couldMatch(&gs[0], &pf, best);
+                if (off && !on) dropped++;
+            }
+        }
+        precheck = 1;
+        printf("precheck: rejected %d/%d seeds early, dropped %d matches, %.1fx faster on these filters\n",
+               rejected, total, dropped, (double)tOff / (tOn ? tOn : 1));
+        CHECK(dropped == 0);
+        CHECK(rejected > 0);
+    }
 
     // blank filter (any biome) matches the first seed of the batch
     SfFilter any = blank();

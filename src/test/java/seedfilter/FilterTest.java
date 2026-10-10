@@ -139,6 +139,32 @@ class FilterTest {
         assertEquals(List.of(), new Filter(null, Native.Size.ANY, List.of(new Filter.Rule("village", 50)), List.of()).warnings());
     }
 
+    @Test
+    void warnsAboutImpossibleCombinations() {
+        java.util.function.Function<Filter, String> first = f -> f.warnings().isEmpty() ? "" : f.warnings().getFirst();
+        assertTrue(first.apply(new Filter("mushroom_fields", Native.Size.ANY, List.of(), List.of())).startsWith("Impossible"));
+        assertTrue(first.apply(new Filter("deep_ocean", Native.Size.ANY, List.of(), List.of())).startsWith("Almost"));
+        assertTrue(first.apply(new Filter("river", Native.Size.LARGE, List.of(), List.of())).startsWith("Almost"));
+        assertTrue(first.apply(new Filter(null, Native.Size.ANY,
+                List.of(new Filter.Rule("village", 50), new Filter.Rule("pillager_outpost", 50)), List.of())).startsWith("Impossible"));
+        assertEquals(List.of(), new Filter(null, Native.Size.ANY,
+                List.of(new Filter.Rule("village", 500), new Filter.Rule("pillager_outpost", 500)), List.of()).warnings());
+        assertTrue(first.apply(nether(null, 30, 30, Native.Bastion.ANY)).startsWith("Impossible"));
+        assertEquals(List.of(), nether(null, 150, 150, Native.Bastion.ANY).warnings());
+        assertTrue(first.apply(new Filter("snowy_plains", Native.Size.ANY,
+                List.of(new Filter.Rule("desert_pyramid", 300)), List.of())).startsWith("Very rare"));
+        assertTrue(first.apply(new Filter(null, Native.Size.ANY,
+                List.of(new Filter.Rule("igloo", 100), new Filter.Rule("jungle_pyramid", 100)), List.of())).startsWith("Very rare"));
+        assertEquals(List.of(), new Filter("desert", Native.Size.ANY,
+                List.of(new Filter.Rule("desert_pyramid", 300)), List.of(new Filter.Near("jungle", 300))).warnings());
+        assertTrue(first.apply(new Filter("plains", Native.Size.ANY, List.of(),
+                List.of(new Filter.Near("mushroom_fields", 100)))).startsWith("Very rare"));
+        assertTrue(first.apply(new Filter(null, Native.Size.ANY,
+                List.of(new Filter.Rule("igloo", 500), new Filter.Rule("desert_pyramid", 500)), List.of())).startsWith("Very rare"));
+        List<Filter.Rule> many = Ids.structures().stream().limit(8).map(s -> new Filter.Rule(s.id(), 3000)).toList();
+        assertTrue(new Filter(null, Native.Size.ANY, many, List.of()).warnings().getLast().startsWith("Almost impossible"));
+    }
+
     static Filter nether(String biome, int fortress, int bastion, Native.Bastion type) {
         return new Filter(null, Native.Size.ANY, List.of(), List.of(), false, biome, fortress, bastion, type);
     }

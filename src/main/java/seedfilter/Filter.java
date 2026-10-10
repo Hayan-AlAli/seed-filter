@@ -58,11 +58,59 @@ public record Filter(String spawnBiome, Native.Size spawnSize, List<Rule> rules,
     // Strongholds generate 1280-2816 blocks from the world center and spawn is almost always near it.
     private static final int STRONGHOLD_MIN_SENSIBLE = 1000;
 
-    /** Conditions that rarely match (they need an unusual spawn), explained for the player. */
+    // Biomes at opposite ends of the temperature noise (wiki: levels 0 vs 3-4), with the structures that need them.
+    private static final Set<String> FROZEN = Set.of("snowy_plains", "ice_spikes", "snowy_taiga", "frozen_ocean",
+            "deep_frozen_ocean", "frozen_river", "snowy_beach", "igloo");
+    private static final Set<String> HOT = Set.of("desert", "badlands", "eroded_badlands", "wooded_badlands", "savanna",
+            "savanna_plateau", "windswept_savanna", "jungle", "bamboo_jungle", "sparse_jungle", "mangrove_swamp",
+            "warm_ocean", "lukewarm_ocean", "deep_lukewarm_ocean", "desert_pyramid", "jungle_pyramid");
+    private static final Set<String> STRIPS = Set.of("river", "frozen_river", "beach", "snowy_beach", "stony_shore");
+    private static final int CLIMATE_CLASH = 1000;         // ponytail: rough cut-off, opposite climates rarely meet closer
+    private static final int TOO_MANY = 8;                 // ponytail: rough count, each extra condition multiplies rarity
+    private static final int OUTPOST_VILLAGE_GAP = 160;    // outposts keep 10 chunks from any village
+    private static final int FORTRESS_BASTION_GAP = 80;    // one per 432-block region with a 4-chunk buffer
+
+    /**
+     * Conditions that (almost) never match, explained for the player. Nothing is blocked: the search still runs,
+     * a modded or bugged world might break the rule.
+     */
     public List<String> warnings() {
-        return rules.stream().filter(r -> r.structure().equals("stronghold") && r.maxDist() < STRONGHOLD_MIN_SENSIBLE)
-                .map(r -> "Possible but rare: strongholds are 1,280+ blocks from the center")
-                .toList();
+        List<String> w = new ArrayList<>();
+        if ("mushroom_fields".equals(spawnBiome)) w.add("Impossible: players never spawn in Mushroom Fields");
+        else if (spawnBiome != null && (spawnBiome.contains("ocean") || spawnBiome.endsWith("river")))
+            w.add("Almost impossible: spawn avoids oceans and rivers");
+        if (spawnSize == Native.Size.LARGE && STRIPS.contains(spawnBiome))
+            w.add("Almost impossible: this biome is a thin strip, never Large");
+        int village = dist("village"), outpost = dist("pillager_outpost");
+        if (village + outpost < OUTPOST_VILLAGE_GAP)
+            w.add("Impossible: outposts never generate within 10 chunks of a village");
+        if (fortressDist > 0 && bastionDist > 0 && fortressDist + bastionDist < FORTRESS_BASTION_GAP)
+            w.add("Impossible: fortresses and bastions are always 80+ blocks apart");
+        if (dist(FROZEN) + dist(HOT) <= CLIMATE_CLASH)
+            w.add("Very rare: frozen and hot biomes are far apart");
+        nearby.stream().filter(n -> n.biome().equals("mushroom_fields") && n.maxDist() < 300).findFirst()
+                .ifPresent(n -> w.add("Very rare: Mushroom Fields are islands far out in deep ocean"));
+        if (dist("stronghold") < STRONGHOLD_MIN_SENSIBLE)
+            w.add("Possible but rare: strongholds are 1,280+ blocks from the center");
+        if (rules.size() + nearby.size() >= TOO_MANY)
+            w.add("Almost impossible: " + (rules.size() + nearby.size()) + " structures/biomes at once");
+        w.sort(java.util.Comparator.comparing(s -> !s.startsWith("Impossible"))); // impossible first: the title shows only one
+        return w;
+    }
+
+    /** Red for "Impossible…", yellow for the rare ones. */
+    public static int warningColor(String warning) {
+        return warning.startsWith("Impossible") ? 0xFFFF5555 : 0xFFFFD040;
+    }
+
+    private int dist(String name) { return dist(Set.of(name)); }
+
+    /** Smallest distance asked for any of {@code names} (spawn biome counts as 0); huge when none is asked for. */
+    private int dist(Set<String> names) {
+        int d = spawnBiome != null && names.contains(spawnBiome) ? 0 : 1_000_000;
+        for (Rule r : rules) if (names.contains(r.structure())) d = Math.min(d, r.maxDist());
+        for (Near n : nearby) if (names.contains(n.biome())) d = Math.min(d, n.maxDist());
+        return d;
     }
 
     /** True when the filter asks for nothing, so world creation needs no search. */

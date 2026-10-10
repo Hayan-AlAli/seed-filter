@@ -3,7 +3,12 @@ package seedfilter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -130,5 +135,36 @@ class SearcherTest {
         Searcher s = new Searcher(new Native.Query(false, -1, Native.Size.ANY, new int[0], new int[0], new int[0], new int[0],
                 171, 0, 0, Native.Bastion.ANY), 2);
         assertEquals(171, Native.netherBiome(false, s.result().get(60, TimeUnit.SECONDS)));
+    }
+
+    @Test
+    void cpuLevels() {
+        assertEquals(List.of(4, 8, 15), Arrays.stream(Searcher.Cpu.values()).map(c -> c.threads(16)).toList());
+        assertEquals(List.of(1, 1, 1), Arrays.stream(Searcher.Cpu.values()).map(c -> c.threads(2)).toList());
+        assertEquals(Searcher.Cpu.LOW, Searcher.Cpu.MAX.next());
+    }
+
+    @Test
+    void cpuLevelIsRemembered(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("cpu.txt");
+        assertEquals(Searcher.Cpu.BALANCED, Searcher.Cpu.load(f)); // missing file: default
+        Searcher.Cpu.LOW.save(f);
+        assertEquals(Searcher.Cpu.LOW, Searcher.Cpu.load(f));
+        Files.writeString(f, "turbo");
+        assertEquals(Searcher.Cpu.BALANCED, Searcher.Cpu.load(f));
+    }
+
+    @Test
+    void pausedThreadsStopSearching() throws Exception {
+        Searcher s = new Searcher(biomeOnly(THE_VOID), 2);
+        s.setActive(0);
+        Thread.sleep(500); // let running batches finish
+        long before = s.checked();
+        Thread.sleep(500);
+        assertEquals(before, s.checked());
+        s.setActive(2);
+        Thread.sleep(500);
+        assertTrue(s.checked() > before);
+        s.cancel();
     }
 }

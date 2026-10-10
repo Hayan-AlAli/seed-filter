@@ -277,15 +277,16 @@ public class FilterScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         super.extractRenderState(g, mouseX, mouseY, delta);
         int x0 = width / 2 - 150, below = LIST + ROWS * ROW;
-        g.centeredText(font, title, width / 2, 8, 0xFFFFFFFF);
+        // a warning (impossible / rare combination) replaces the title so it shows on every tab without covering widgets
+        List<String> warnings = currentFilter().warnings();
+        if (warnings.isEmpty()) g.centeredText(font, title, width / 2, 8, 0xFFFFFFFF);
+        else g.centeredText(font, "⚠ " + warnings.getFirst(), width / 2, 8, Filter.warningColor(warnings.getFirst()));
         if (tab == Tab.NETHER) {
             g.text(font, "Arrival biome (where a portal built at spawn leads):", x0, 48, 0xFFA0A0A0);
             if (bastion != null) g.text(font, "Type:", x0 + 10, 161, 0xFFA0A0A0);
         }
         g.text(font, pageLabel, x0 + 32, below + 4, 0xFFA0A0A0);
-        List<String> warnings = tab == Tab.STRUCTURES ? currentFilter().warnings() : List.of();
-        if (!warnings.isEmpty()) g.centeredText(font, warnings.getFirst(), width / 2, below + 25, 0xFFFFD040);
-        else g.text(font, switch (tab) {
+        g.text(font, switch (tab) {
             case SPAWN -> "Size:";
             case STRUCTURES -> "All ticked must be within their distance";
             case NEARBY -> "All ticked must exist within their distance";

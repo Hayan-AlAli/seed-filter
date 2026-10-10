@@ -4,11 +4,14 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.VarHandle;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.LockSupport;
 
 /** Runs Native.search on N daemon threads over consecutive batches from a random start seed. */
 public final class Searcher {
@@ -21,17 +24,65 @@ public final class Searcher {
     private final AtomicBoolean stop = new AtomicBoolean();
     private final CompletableFuture<Long> result = new CompletableFuture<>();
     private final long startNanos = System.nanoTime();
+    private volatile int active; // threads with an index below this search, the rest wait (see setActive)
 
+    /** How much of the CPU a search may use. Search threads always run at the lowest OS priority as well. */
+    public enum Cpu {
+        LOW("Low"), BALANCED("Balanced"), MAX("Max");
+
+        public final String label;
+
+        Cpu(String label) { this.label = label; }
+
+        /** Search threads on a machine with {@code cores} logical cores: a quarter, half, or all but one. */
+        public int threads(int cores) {
+            return Math.max(1, switch (this) {
+                case LOW -> cores / 4;
+                case BALANCED -> cores / 2;
+                case MAX -> cores - 1;
+            });
+        }
+
+        public Cpu next() { return values()[(ordinal() + 1) % values().length]; }
+
+        public static Cpu load(Path file) {
+            try {
+                return valueOf(Files.readString(file).strip());
+            } catch (Exception e) { // missing or edited by hand
+                return BALANCED;
+            }
+        }
+
+        public void save(Path file) {
+            try {
+                Files.writeString(file, name());
+            } catch (Exception ignored) { // only a preference
+            }
+        }
+    }
+
+    /** Starts {@code threads} search threads, all of them active. */
     public Searcher(Native.Query q, int threads) {
         Arena arena = Arena.ofAuto(); // ponytail: GC frees it once all threads exit
         filter = Native.toSegment(arena, q);
         nativeStop = arena.allocate(ValueLayout.JAVA_INT);
-        for (int i = 0; i < threads; i++)
-            Thread.ofPlatform().daemon().name("seedfilter-" + i).start(this::run);
+        active = threads;
+        for (int i = 0; i < threads; i++) {
+            int index = i;
+            // lowest priority: other programs (and the game) get the CPU first
+            Thread.ofPlatform().daemon().priority(Thread.MIN_PRIORITY).name("seedfilter-" + i).start(() -> run(index));
+        }
     }
 
-    private void run() {
+    /** Changes how many of the started threads search; takes effect within one batch. */
+    public void setActive(int threads) { active = threads; }
+
+    private void run(int index) {
         while (!stop.get()) {
+            if (index >= active) { // paused by a lower CPU setting
+                LockSupport.parkNanos(50_000_000);
+                continue;
+            }
             OptionalLong hit = Native.search(filter, next.getAndAdd(BATCH), BATCH, nativeStop);
             checked.addAndGet(BATCH);
             if (hit.isPresent()) offer(hit.getAsLong());

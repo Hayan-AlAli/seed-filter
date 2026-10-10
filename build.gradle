@@ -59,7 +59,7 @@ tasks.register('compileNativeTest', Exec) {
 	inputs.files(cubiomesSrc, 'native/seedfilter.c', 'native/seedfilter.h', 'native/test_seedfilter.c')
 	outputs.file(testExe)
 	doFirst { nativeOut.mkdirs() }
-	commandLine(['zig', 'cc', *zigFlags, '-o', testExe.path, 'native/test_seedfilter.c', *libSources])
+	commandLine(['zig', 'cc', *zigFlags, '-o', testExe.path, 'native/test_seedfilter.c', *cubiomesSrc.files.collect { it.path }]) // the test #includes seedfilter.c
 }
 
 tasks.register('testNative', Exec) {

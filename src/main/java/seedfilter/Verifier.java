@@ -7,7 +7,9 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -49,8 +51,13 @@ public final class Verifier {
             pending = null;
             ServerPlayer player = handler.getPlayer();
             ServerLevel level = (ServerLevel) player.level();
-            if (!f.hideSeed())
-                player.sendSystemMessage(Component.literal("Seed Filter: seed " + level.getSeed()).withStyle(ChatFormatting.GREEN));
+            if (!f.hideSeed()) {
+                String seed = Long.toString(level.getSeed());
+                player.sendSystemMessage(Component.literal("Seed Filter: seed ").withStyle(ChatFormatting.GREEN)
+                        .append(Component.literal("[" + seed + "]").withStyle(s -> s.withColor(ChatFormatting.AQUA)
+                                .withClickEvent(new ClickEvent.CopyToClipboard(seed))
+                                .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to copy"))))));
+            }
             // world spawn, not where the player landed: size samples on a 16-block grid from this exact point
             for (String p : check(level, level.getRespawnData().pos(), f))
                 player.sendSystemMessage(Component.literal("Seed Filter: " + p).withStyle(ChatFormatting.YELLOW));
