@@ -43,7 +43,7 @@ Seeds are checked with [cubiomes](https://github.com/Cubitect/cubiomes), a recre
 Windows, macOS and Linux, on both x64 and ARM64 (including Apple Silicon). The fast search is written in C, and the jar contains a build for each system. The right one is picked automatically.
 
 **Why is my search slow?**
-Speed depends on your CPU (the mod uses all cores but one) and on how rare your filter is. Every condition you add makes a match rarer. Nearby biomes at large distances cost the most. If no match turns up after a minute, try fewer or closer-to-common conditions.
+Speed depends on your CPU and on how rare your filter is. The **CPU** button on the search screen sets how many cores it uses: Low, Balanced (the default) or Max. Every condition you add makes a match rarer. Nearby biomes at large distances cost the most. If no match turns up after a minute, try fewer or closer-to-common conditions.
 
 **Is "every structure within 500 blocks" possible?**
 Practically, no. Some structures need biomes that almost never sit next to each other, like desert, jungle, snowy plains and deep ocean. Strongholds are 1,280+ blocks from the world center, so a stronghold close to spawn needs a spawn far from the center. It's possible but rare.
