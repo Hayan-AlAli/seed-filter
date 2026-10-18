@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
+import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
@@ -19,8 +20,10 @@ import org.slf4j.LoggerFactory;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -54,6 +57,18 @@ public class SeedFilterMod implements ClientModInitializer {
         if (p.is(WorldPresets.NORMAL)) return Optional.of(false);
         if (p.is(WorldPresets.LARGE_BIOMES)) return Optional.of(true);
         return Optional.empty();
+    }
+
+    /** The filter's warnings plus ones from this screen's other world settings. */
+    public static List<String> warnings(CreateWorldScreen s, Filter f) {
+        List<String> w = new ArrayList<>(f.warnings());
+        WorldCreationUiState ui = s.getUiState();
+        if (!ui.isGenerateStructures() && (!f.rules().isEmpty() || f.fortressDist() > 0 || f.bastionDist() > 0))
+            w.addFirst("Impossible: Generate Structures is off");
+        // "file/…" = packs the player added; built-in and mod packs keep vanilla generation
+        if (ui.getSettings().dataConfiguration().dataPacks().getEnabled().stream().anyMatch(p -> p.startsWith("file/")))
+            w.add("Data packs may change world generation: the result can differ");
+        return w;
     }
 
     /** Null when Seed Filter can run for this screen's current settings, else why not. */

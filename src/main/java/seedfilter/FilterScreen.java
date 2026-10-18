@@ -278,7 +278,7 @@ public class FilterScreen extends Screen {
         super.extractRenderState(g, mouseX, mouseY, delta);
         int x0 = width / 2 - 150, below = LIST + ROWS * ROW;
         // a warning (impossible / rare combination) replaces the title so it shows on every tab without covering widgets
-        List<String> warnings = currentFilter().warnings();
+        List<String> warnings = SeedFilterMod.warnings(world, currentFilter());
         if (warnings.isEmpty()) g.centeredText(font, title, width / 2, 8, 0xFFFFFFFF);
         else g.centeredText(font, "⚠ " + warnings.getFirst(), width / 2, 8, Filter.warningColor(warnings.getFirst()));
         if (tab == Tab.NETHER) {

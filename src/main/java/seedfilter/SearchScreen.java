@@ -90,7 +90,7 @@ public class SearchScreen extends Screen {
         if (searcher.elapsedSeconds() >= 60)
             g.centeredText(font, "May be extremely rare or impossible: try fewer conditions",
                     width / 2, y += 12, 0xFFFFD040);
-        for (String w : filter.warnings())
+        for (String w : SeedFilterMod.warnings(world, filter))
             g.centeredText(font, w, width / 2, y += 12, Filter.warningColor(w));
     }
 }
