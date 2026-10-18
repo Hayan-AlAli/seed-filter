@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -15,6 +16,8 @@ static int near(int x, int z, int sx, int sz, int r)
 }
 
 #define PI 3.14159265358979323846
+
+static int precheck = 1; // the self-test turns it off to prove the exact pre-checks never drop a match
 
 static uint64_t dist2(int x, int z) { return (uint64_t)((int64_t)x * x) + (uint64_t)((int64_t)z * z); }
 
@@ -154,6 +157,31 @@ static int surfaceBiome(Generator *g, int x, int z)
     return getBiomeAt(g, 4, x >> 2, SURFACE_Y >> 2, z >> 2);
 }
 
+// Exact climate pre-check: every climate value of a `biome` sample lies within lim = getBiomeParaLimits(MC, biome), so
+// one value outside rules the sample out without the full lookup. Depth is skipped (it varies with y), so passing is
+// necessary, never sufficient. Sampled like getBiomeAt at 1:4.
+static int climateAllows(const Generator *g, const int *lim, int x, int z)
+{
+    // most selective first
+    static const int P[] = {NP_CONTINENTALNESS, NP_WEIRDNESS, NP_EROSION, NP_TEMPERATURE, NP_HUMIDITY};
+    if (!precheck || !lim) return 1;
+    int qx = x >> 2, qz = z >> 2;
+    double px = qx + sampleDoublePerlin(&g->bn.climate[NP_SHIFT], qx, 0, qz) * 4.0;
+    double pz = qz + sampleDoublePerlin(&g->bn.climate[NP_SHIFT], qz, qx, 0) * 4.0;
+    for (int k = 0; k < 5; k++) {
+        const int *l = lim + 2 * P[k];
+        if (l[0] == INT_MIN && l[1] == INT_MAX) continue;
+        int64_t v = climate(g, P[k], px, pz);
+        if (v < l[0] || v > l[1]) return 0;
+    }
+    return 1;
+}
+
+static int isSurfaceBiome(Generator *g, const int *lim, int biome, int x, int z)
+{
+    return climateAllows(g, lim, x, z) && surfaceBiome(g, x, z) == biome;
+}
+
 static int sizeClass(long long area)
 {
     return area > 600LL * 600 ? SF_SIZE_LARGE : area >= 250LL * 250 ? SF_SIZE_MEDIUM : SF_SIZE_SMALL;
@@ -164,8 +192,9 @@ static int patchSize(Generator *g, int sx, int sz, int biome)
 {
     // spawn's block biome can differ from its 4x4 cell's; start from the first cell within 4 blocks that matches
     static const int O[9][2] = {{0, 0}, {4, 0}, {-4, 0}, {0, 4}, {0, -4}, {4, 4}, {4, -4}, {-4, 4}, {-4, -4}};
+    const int *lim = getBiomeParaLimits(MC, biome);
     int k = 0;
-    while (k < 9 && surfaceBiome(g, sx + O[k][0], sz + O[k][1]) != biome) k++;
+    while (k < 9 && !isSurfaceBiome(g, lim, biome, sx + O[k][0], sz + O[k][1])) k++;
     if (k == 9) return SF_SIZE_SMALL;
     sx += O[k][0];
     sz += O[k][1];
@@ -180,7 +209,7 @@ static int patchSize(Generator *g, int sx, int sz, int biome)
     while (head < tail && (long long)cells * CELL * CELL <= 600LL * 600) {
         int i = queue[head++];
         int cx = i % W - PATCH_R, cz = i / W - PATCH_R;
-        if (surfaceBiome(g, sx + cx * CELL, sz + cz * CELL) != biome) continue;
+        if (!isSurfaceBiome(g, lim, biome, sx + cx * CELL, sz + cz * CELL)) continue;
         cells++;
         for (int k = 0; k < 4; k++) {
             int nx = cx + D[k][0], nz = cz + D[k][1];
@@ -194,20 +223,22 @@ static int patchSize(Generator *g, int sx, int sz, int biome)
     return sizeClass((long long)cells * CELL * CELL);
 }
 
-static int probe(Generator *g, int biome, int sx, int sz, int r, int i, int j)
+static int probe(Generator *g, const int *lim, int biome, int sx, int sz, int r, int i, int j)
 {
     int x = sx + i * NEAR_STEP, z = sz + j * NEAR_STEP;
-    return near(x, z, sx, sz, r) && surfaceBiome(g, x, z) == biome;
+    return near(x, z, sx, sz, r) && isSurfaceBiome(g, lim, biome, x, z);
 }
 
 // Rings outward from spawn so close matches return early.
 static int biomeNear(Generator *g, int biome, int sx, int sz, int r)
 {
+    const int *lim = getBiomeParaLimits(MC, biome);
     for (int ring = 0; ring <= r / NEAR_STEP; ring++) {
         for (int i = -ring; i <= ring; i++)
-            if (probe(g, biome, sx, sz, r, i, -ring) || (ring && probe(g, biome, sx, sz, r, i, ring))) return 1;
+            if (probe(g, lim, biome, sx, sz, r, i, -ring) || (ring && probe(g, lim, biome, sx, sz, r, i, ring)))
+                return 1;
         for (int j = -ring + 1; j <= ring - 1; j++)
-            if (probe(g, biome, sx, sz, r, -ring, j) || probe(g, biome, sx, sz, r, ring, j)) return 1;
+            if (probe(g, lim, biome, sx, sz, r, -ring, j) || probe(g, lim, biome, sx, sz, r, ring, j)) return 1;
     }
     return 0;
 }
@@ -246,8 +277,6 @@ static int couldMatch(const Generator *g, const SfFilter *f, uint64_t best)
     if (f->bastionDist > 0 && !structureMaybe(Bastion, g->seed, netherReach + f->bastionDist)) return 0;
     return 1;
 }
-
-static int precheck = 1; // the self-test turns it off to prove it never drops a match
 
 // gn: a second generator used for the Nether conditions, applied only once everything else matched
 static int matches(Generator *g, Generator *gn, const SfFilter *f, uint64_t seed)

@@ -90,6 +90,41 @@ int main(void)
         CHECK(rejected > 0);
     }
 
+    // the climate pre-check gives biomeNear and patchSize the full lookup's exact answers (default and large biomes)
+    {
+        int ids[] = {jungle, deep_ocean, cherry_grove, badlands, plains, mushroom_fields, ocean};
+        static Generator gc[2];
+        setupGenerator(&gc[0], MC, 0);
+        setupGenerator(&gc[1], MC, LARGE_BIOMES);
+        int differ = 0, hits = 0, total = 0;
+        clock_t tOn = 0, tOff = 0;
+        for (uint64_t s = 0; s < 150; s++) {
+            Generator *g = &gc[s & 1];
+            applySeed(g, DIM_OVERWORLD, s * 0x9E3779B97F4A7C15ULL);
+            Pos sp = spawnOf(g);
+            for (int k = 0; k <= 7; k++, total++) {
+                int on, off;
+                clock_t t = clock();
+                precheck = 1;
+                if (k < 7) on = biomeNear(g, ids[k], sp.x, sp.z, 800);
+                else on = patchSize(g, sp.x, sp.z, getBiomeAt(g, 1, sp.x, SURFACE_Y, sp.z));
+                tOn += clock() - t;
+                t = clock();
+                precheck = 0;
+                if (k < 7) off = biomeNear(g, ids[k], sp.x, sp.z, 800);
+                else off = patchSize(g, sp.x, sp.z, getBiomeAt(g, 1, sp.x, SURFACE_Y, sp.z));
+                tOff += clock() - t;
+                differ += on != off;
+                hits += k < 7 && on;
+            }
+        }
+        precheck = 1;
+        printf("climate precheck: %d/%d biomeNear/patchSize answers differ (%d near hits), %.1fx faster\n",
+               differ, total, hits, (double)tOff / (tOn ? tOn : 1));
+        CHECK(differ == 0);
+        CHECK(hits > 0);
+    }
+
     // blank filter (any biome) matches the first seed of the batch
     SfFilter any = blank();
     CHECK(sf_search(&any, 42, 1, &noStop, &seed) && seed == 42);
