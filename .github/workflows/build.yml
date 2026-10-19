@@ -24,11 +24,11 @@ jobs:
     env:
       MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -37,7 +37,7 @@ jobs:
         with:
           version: 0.17.0
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5 # v6 adds proprietary caching terms
 
       - name: Build natives and jar, run C and Java tests
         shell: bash
@@ -51,7 +51,7 @@ jobs:
 
       - name: Build provenance attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             build/libs/*.jar
@@ -59,7 +59,7 @@ jobs:
             build/native/*/*.so
             build/native/*/*.dylib
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: seedfilter-${{ github.sha }}
           path: |
@@ -71,7 +71,7 @@ jobs:
 
       - name: GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             build/libs/*.jar
